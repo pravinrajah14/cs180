@@ -147,6 +147,12 @@ figcaption {
   gap: 1rem;
 }
 
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
 @media (max-width: 600px) {
   .photo-pair {
     grid-template-columns: 1fr;
