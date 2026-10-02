@@ -1,0 +1,1038 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Project 3: Fun with Filters and Frequencies</title>
+  <link rel="stylesheet" href="../../style.css" />
+  <style media="print">
+    /* Print only: shrink text, code, and images so each part fits in about two pages. */
+    @page { margin: 1cm; }
+    body { font-size: 8.5pt; line-height: 1.3; background: #fff; }
+    header { padding: 0 0 0.3rem; }
+    header h1 { font-size: 14pt; }
+    nav.breadcrumb, footer { display: none; }
+    main { max-width: none; padding: 0.4rem 0 0; }
+    h2 { font-size: 12pt; margin: 0.9rem 0 0.4rem; padding-bottom: 0.15rem; }
+    h3 { font-size: 10pt; margin: 0.6rem 0 0.25rem; }
+    h2, h3 { break-after: avoid; }
+    p { margin: 0.3rem 0; }
+    pre { padding: 0.35rem 0.5rem; margin: 0.35rem 0; line-height: 1.2; white-space: pre-wrap; overflow-wrap: anywhere; }
+    pre code { font-size: 6.5pt; }
+    table { font-size: 8pt; margin: 0.3rem 0 0.2rem; }
+    th, td { padding: 0.15rem 0.5rem; }
+    .note, figcaption { font-size: 7pt; margin-top: 0.15rem; }
+    figure, table { break-inside: avoid; }
+    .photo-pair, .photo-grid { gap: 0.3rem 0.5rem; margin: 0.35rem 0; }
+    .photo-pair,
+    .photo-grid,
+    .photo-grid:has(> figure:nth-child(2):last-child),
+    .photo-grid:has(> figure:nth-child(4):last-child) { grid-template-columns: repeat(4, 1fr); }
+    .photo-grid:has(> figure:nth-child(5):last-child),
+    .photo-grid:has(> figure:nth-child(6):last-child) { grid-template-columns: repeat(6, 1fr); }
+    .photo-pair figure img, .photo-grid figure img { width: auto; max-width: 100%; max-height: 4.2cm; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="wrap">
+      <h1>Project 3: Fun with Filters and Frequencies</h1>
+      <p>Convolutions, finite differences, and filtering images.</p>
+    </div>
+  </header>
+
+  <nav class="breadcrumb">
+    <a href="../../index.html">&larr; Back to all projects</a>
+  </nav>
+
+  <main>
+
+    <h2>Part 1.1: Convolutions from Scratch</h2>
+    <h3>Four for loops</h3>
+
+    <p>
+      First, I get the kernel size. Then I pad the image, surrounding it with zeros so the kernel always has something to read at the edges. Next, I work out the
+      output size: the kernel can sit at (padded size &minus; kernel size + 1) positions along each axis, which in "same" mode gives an output the same size
+      as the original image. I make an empty output of that size. The two outer loops then pick an output pixel (r, c), so every pixel gets visited one at a time.
+      For each pixel, I start a running total at 0 and use the two inner loops to walk over every cell (i, j) of the kernel. At each cell, I multiply the image
+      value <code>padded[r + i, c + j]</code> by the kernel value <code>kernel[kernel_height - 1 - i, kernel_width - 1 - j]</code> and add it to the total. Reading the kernel backwards like this is what flips it, which turns the operation
+      from cross-correlation into convolution. Once the inner loops finish, I store the total in <code>output[r, c]</code> and move on to the next pixel. Since
+      every multiply-add is its own Python step, this version does 81 operations per pixel for the 9x9 box filter and 3 for D<sub>x</sub> and D<sub>y</sub>, which is why it's the slowest of the three on the 9x9 box filter.
+    </p>
+
+    <pre><code>def convolution_four(image, kernel, mode="same"):
+    kernel_height, kernel_width = kernel.shape
+    padded = pad_image(image, kernel, mode)
+    output_height, output_width = padded.shape[0] - kernel_height + 1, padded.shape[1] - kernel_width + 1
+    output = np.zeros((output_height, output_width))
+    for r in range(output_height):
+        for c in range(output_width):
+            pixel_sum = 0.0
+            for i in range(kernel_height):
+                for j in range(kernel_width):
+                    pixel_sum += kernel[kernel_height - 1 - i, kernel_width - 1 - j] * padded[r + i, c + j]
+            output[r, c] = pixel_sum
+    return output</code></pre>
+
+    <h3>Two for loops</h3>
+    <p>
+      Getting the kernel size, padding the image, and working out the output size are the same as before. The difference starts with the flip: instead of
+      reading the kernel backwards inside the loops, I flip it once up front with <code>kernel[::-1, ::-1]</code>, which reverses its rows and columns. I make
+      the empty output and use the same two loops to pick each output pixel (r, c). But instead of walking the kernel one cell at a time, I grab the entire
+      kernel_height &times; kernel_width window under the kernel in one slice, <code>padded[r : r + kernel_height, c : c + kernel_width]</code>, multiply it elementwise with the
+      flipped kernel, and sum the result with <code>np.sum</code>. This gives exactly the same value as the four-loop version, since <code>flipped[i, j]</code> is
+      <code>kernel[kernel_height - 1 - i, kernel_width - 1 - j]</code>. I store it in <code>output[r, c]</code> and return the output once every pixel is filled.
+      Replacing the two inner loops with one numpy call moves the multiply-adds into numpy's compiled code, which is why this version is much faster on the 9x9 box filter.
+    </p>
+    <pre><code>def convolution_two(image, kernel, mode="same"):
+    kernel_height, kernel_width = kernel.shape
+    padded = pad_image(image, kernel, mode)
+    output_height, output_width = padded.shape[0] - kernel_height + 1, padded.shape[1] - kernel_width + 1
+    flipped = kernel[::-1, ::-1]
+    output = np.zeros((output_height, output_width))
+    for r in range(output_height):
+        for c in range(output_width):
+            output[r, c] = np.sum(padded[r : r + kernel_height, c : c + kernel_width] * flipped)
+    return output</code></pre>
+
+    <h3>Padding</h3>
+    <p>
+      When the kernel sits near the edge of the image, part of it hangs off the image, so I pad the image with zeros first to give it something to read. I
+      used "same" padding for my results, which adds just enough zeros that the output is the same size as the input: half the kernel size on each side, so
+      4 pixels for the 9x9 box filter and 1 pixel for D<sub>x</sub> and D<sub>y</sub>. I also implemented "full" padding, which adds kernel size
+      &minus; 1 on every side so the output grows by kernel size &minus; 1 in each direction. The function takes care of both modes with <code>np.pad</code>, which fills with zeros by default.
+      This is the same as <code>convolve2d</code> with <code>boundary="fill", fillvalue=0</code>, and it's why the edges of the blurred image get slightly darker
+      and the derivative images show a false edge along the border, since the padding acts like black pixels.
+    </p>
+    <pre><code>def pad_image(image, kernel, mode="same"):
+    kernel_height, kernel_width = kernel.shape
+    if mode == "same":
+        pad_widths = ((kernel_height // 2, (kernel_height - 1) // 2), (kernel_width // 2, (kernel_width - 1) // 2))
+    else:
+        pad_widths = ((kernel_height - 1, kernel_height - 1), (kernel_width - 1, kernel_width - 1))
+    return np.pad(image, pad_widths)</code></pre>
+
+    <h3>Comparison with scipy.signal.convolve2d</h3>
+    <p>
+      Both of my implementations match <code>convolve2d</code>: after rounding
+      to 2 decimal places, <code>np.array_equal</code> returns true for all
+      three filters, which confirms that my flip and padding are correct.
+    </p>
+    <p>
+      For runtime, on the 9x9 box filter the two-loop version (3.02 s) is about 8x
+      faster than the four-loop version (23.99 s), because it replaces 81 Python
+      multiply-adds per pixel with one numpy call. SciPy (0.15 s) is another 20x
+      faster than that, since it runs entirely in compiled code with no Python
+      loops at all. For D<sub>x</sub> and D<sub>y</sub> the ranking flips: the
+      four-loop version (about 1.5&ndash;1.7 s) is faster than the two-loop
+      version (about 2.9 s). With only 3 multiplies per pixel, there is very
+      little work to save by vectorizing, while each <code>np.sum</code> call
+      still has a fixed overhead. That's also why the two-loop time is about
+      3 s no matter which filter I use. Vectorizing only pays off when the kernel
+      is big enough to make up for that overhead.
+    </p>
+    <pre><code>def timed(function, *args, **kwargs):
+    start = time.perf_counter()
+    result = function(*args, **kwargs)
+    return result, time.perf_counter() - start
+
+
+for name, kernel in [("boxblur", box_filter_9x9), ("Dx", Dx), ("Dy", Dy)]:
+    four_result, four_time = timed(convolution_four, img, kernel)
+    two_result, two_time = timed(convolution_two, img, kernel)
+    scipy_result, scipy_time = timed(convolve2d, img, kernel, mode="same", boundary="fill", fillvalue=0)
+
+    print(name, "times:", four_time, two_time, scipy_time)
+    print(name, "matches:", np.array_equal(np.round(four_result, 2), np.round(scipy_result, 2)), np.array_equal(np.round(two_result, 2), np.round(scipy_result, 2)))</code></pre>
+    <table>
+      <thead>
+        <tr><th>Filter</th><th>4 loops</th><th>2 loops</th><th>SciPy</th><th>Matches SciPy</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Box 9x9</td><td>23.99 s</td><td>3.02 s</td><td>0.1478 s</td><td>Yes / Yes</td></tr>
+        <tr><td>D<sub>x</sub></td><td>1.49 s</td><td>2.84 s</td><td>0.0118 s</td><td>Yes / Yes</td></tr>
+        <tr><td>D<sub>y</sub></td><td>1.74 s</td><td>2.93 s</td><td>0.0158 s</td><td>Yes / Yes</td></tr>
+      </tbody>
+    </table>
+    <p class="note">
+      Timed on the 1440 x 1080 grayscale photo. "Matches SciPy" is
+      <code>np.array_equal</code> against <code>convolve2d</code>, after rounding to 2 decimal places, for the 4-loop / 2-loop versions.
+    </p>
+
+    <h3>Results</h3>
+    <pre><code>img = np.array(Image.open(PROJECT_DIR + 'images/selfie.JPG').convert('L'), dtype=np.float64)
+box_filter_9x9 = np.ones((9, 9)) / 81.0
+Dx = np.array([[1, 0, -1]])
+Dy = np.array([[1], [0], [-1]])</code></pre>
+    <div class="photo-grid">
+      <figure>
+        <img src="images/part1_1/original.png" alt="Original grayscale photo" />
+        <figcaption>Original (grayscale)</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part1_1/boxblur.png" alt="Photo blurred with a 9x9 box filter" />
+        <figcaption>9x9 box filter</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part1_1/Dx.png" alt="Derivative of the photo in x" />
+        <figcaption>D<sub>x</sub> = [1, 0, -1]</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part1_1/Dy.png" alt="Derivative of the photo in y" />
+        <figcaption>D<sub>y</sub> = [1, 0, -1]<sup>T</sup></figcaption>
+      </figure>
+    </div>
+
+    <h2>Part 1.2: Finite Difference Operator</h2>
+    <p>
+      I convolved the cameraman image with D<sub>x</sub> = [1, 0, -1] and
+      D<sub>y</sub> = [1, 0, -1]<sup>T</sup> using
+      <code>scipy.signal.convolve2d</code> to get the partial derivatives in
+      x and y, then combined them into the gradient magnitude,
+      sqrt((&part;f/&part;x)<sup>2</sup> + (&part;f/&part;y)<sup>2</sup>), which is
+      large wherever the brightness changes quickly in any direction.
+    </p>
+    <div class="photo-pair">
+      <figure>
+        <img src="images/cameraman.png" alt="Original cameraman image" />
+        <figcaption>Original cameraman</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part1_2/Dx.png" alt="Partial derivative of the cameraman image in x" />
+        <figcaption>Partial derivative in x</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part1_2/Dy.png" alt="Partial derivative of the cameraman image in y" />
+        <figcaption>Partial derivative in y</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part1_2/grad_mag.png" alt="Gradient magnitude of the cameraman image" />
+        <figcaption>Gradient magnitude</figcaption>
+      </figure>
+    </div>
+
+    <h3>Edge image and threshold</h3>
+    <p>
+      To turn the gradient magnitude into an edge image, I kept only the
+      pixels above a threshold. I tried thresholds from 30 to 135 and chose
+      75. At 45 the grass is full of noise, and at 120 the outline of the
+      coat and the tripod legs break apart, so 75 is the best tradeoff
+      between removing noise and keeping the real edges.
+    </p>
+    <div class="photo-grid">
+      <figure>
+        <img src="images/part1_2/edges_45.png" alt="Edge image at threshold 45" />
+        <figcaption>Threshold 45: too low</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part1_2/edges_75.png" alt="Edge image at threshold 75" />
+        <figcaption>Threshold 75: chosen</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part1_2/edges_120.png" alt="Edge image at threshold 120" />
+        <figcaption>Threshold 120: too high</figcaption>
+      </figure>
+    </div>
+
+    <h2>Part 1.3: Derivative of Gaussian (DoG) Filter</h2>
+
+    <h3>Gaussian filter</h3>
+    <p>
+      I built a 1D Gaussian with <code>cv2.getGaussianKernel</code> using
+      sigma = 2 and a size of 6 * sigma + 1 = 13, following the rule from
+      lecture that the filter's half-width should be about 3 sigma. I then
+      took its outer product with its transpose to get the 2D Gaussian.
+    </p>
+    <pre><code>sigma = 2
+gaussian_1d = cv2.getGaussianKernel(6 * sigma + 1, sigma)
+gaussian_2d = gaussian_1d @ gaussian_1d.T</code></pre>
+    <div class="photo-grid">
+      <figure>
+        <img src="images/part1_3/gaussian_filter.png" alt="2D Gaussian filter" />
+        <figcaption>Gaussian filter (upscaled 20x)</figcaption>
+      </figure>
+    </div>
+
+    <h3>Method 1: blur, then differentiate</h3>
+    <p>
+      I blurred the cameraman image with the Gaussian, then convolved the
+      blurred image with D<sub>x</sub> and D<sub>y</sub> and computed the
+      gradient magnitude the same way as in Part 1.2.
+    </p>
+    <pre><code>def convolve(image, kernel):
+    return convolve2d(image, kernel, mode="same", boundary="symm")
+
+
+blurred = convolve(img, gaussian_2d)
+blurred_x, blurred_y = convolve(blurred, Dx), convolve(blurred, Dy)
+blurred_magnitude = np.sqrt(blurred_x ** 2 + blurred_y ** 2)</code></pre>
+    <div class="photo-grid">
+      <figure>
+        <img src="images/part1_3/blurred.png" alt="Cameraman image blurred with the Gaussian" />
+        <figcaption>Blurred cameraman</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part1_3/blur_grad_mag.png" alt="Gradient magnitude of the blurred cameraman image" />
+        <figcaption>Gradient magnitude</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part1_3/blur_edges_20.png" alt="Edge image of the blurred cameraman at threshold 20" />
+        <figcaption>Edges, threshold 20</figcaption>
+      </figure>
+    </div>
+    <p>
+      I chose a threshold of 20. At 8, the edge image picks up fine background detail like the tall tower and the full row of buildings, but the grass
+      turns into dense speckle, so blurring alone isn't enough at that level. At 32, the grass is clean, but real edges start disappearing: the horizon
+      breaks into short dashes, the tower is gone, and the tripod legs split into disconnected pieces. At 20, the grass stays clean while the
+      cameraman, camera, tripod, and horizon remain mostly continuous. The tradeoff is that the faint background tower mostly drops out, which I accepted to avoid the grass noise.
+    </p>
+
+    <h3>Method 2: DoG filters</h3>
+    <p>
+      I convolved the Gaussian with D<sub>x</sub> and D<sub>y</sub> to get two
+      derivative of Gaussian (DoG) filters. With these, the image needs only
+      one convolution per direction instead of two. This works because
+      convolution is associative: blurring and then differentiating is the
+      same as convolving once with the blurred derivative filter.
+    </p>
+    <pre><code>dog_filter_x, dog_filter_y = convolve2d(gaussian_2d, Dx), convolve2d(gaussian_2d, Dy)
+
+dog_magnitude = np.sqrt(convolve(img, dog_filter_x) ** 2 + convolve(img, dog_filter_y) ** 2)</code></pre>
+    <div class="photo-grid">
+      <figure>
+        <img src="images/part1_3/DoG_x_filter.png" alt="Derivative of Gaussian filter in x" />
+        <figcaption>DoG filter in x (upscaled 20x)</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part1_3/DoG_y_filter.png" alt="Derivative of Gaussian filter in y" />
+        <figcaption>DoG filter in y (upscaled 20x)</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part1_3/dog_grad_mag.png" alt="Gradient magnitude from the DoG filters" />
+        <figcaption>Gradient magnitude</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part1_3/dog_edges_20.png" alt="Edge image from the DoG filters at threshold 20" />
+        <figcaption>Edges, threshold 20</figcaption>
+      </figure>
+    </div>
+
+    <h3>Comparison with the finite difference method</h3>
+
+    <div class="photo-grid">
+      <figure>
+        <img src="images/part1_2/grad_mag.png" alt="Gradient magnitude from Part 1.2" />
+        <figcaption>Part 1.2: gradient magnitude</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part1_3/blur_grad_mag.png" alt="Gradient magnitude from Part 1.3" />
+        <figcaption>Part 1.3: gradient magnitude</figcaption>
+      </figure>
+    </div>
+    <div class="photo-grid">
+      <figure>
+        <img src="images/part1_2/edges_75.png" alt="Edge image from Part 1.2 at threshold 75" />
+        <figcaption>Part 1.2: edges, threshold 75</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part1_3/blur_edges_20.png" alt="Edge image from Part 1.3 at threshold 20" />
+        <figcaption>Part 1.3: edges, threshold 20</figcaption>
+      </figure>
+    </div>
+
+    <p>
+      The 1.3 edge image is a lot cleaner than 1.2. In 1.2, the grass shows up as noise because the finite difference picks up every small change between
+      neighboring pixels. In 1.3, the Gaussian blurs those small changes out first, so only the bigger edges like the cameraman and tripod are left. The
+      edges are also thicker in 1.3 because the blur spreads each sharp edge out over a few pixels, so the gradient is high over a wider area. Since the blur
+      makes all the gradient values smaller, I also had to lower the threshold from 75 to 20. The downside is that the blur also removes small details, like the tower in the background.
+    </p>
+
+    <h2>Part 2.1: Image Sharpening</h2>
+
+    <h3>How unsharp masking works</h3>
+    <p>
+      The Gaussian is a low-pass filter, so blurring an image keeps only its low frequencies. I subtracted the blurred image from the original, which
+      leaves just the high frequencies, and then added alpha times those high frequencies back to the original to sharpen it. I used the same Gaussian (sigma = 2) as in Part 1.3.
+    </p>
+    <p>
+      Because convolution is linear, I combined all of this into a single filter: f + alpha(f &minus; f * g) = f * ((1 + alpha)e &minus; alpha g),
+      where f is the image, g is the Gaussian, and e is the unit impulse (identity). This is the unsharp mask filter from lecture.
+    </p>
+    <pre><code>identity = np.zeros_like(gaussian_2d)
+    identity[3 * sigma, 3 * sigma] = 1
+
+    blurred = convolve(img, gaussian_2d)
+    high_frequencies = img - blurred
+
+    for alpha in [0, 1, 2, 5, 10]:
+        unsharp_filter = (1 + alpha) * identity - alpha * gaussian_2d
+    sharpened = convolve(img, unsharp_filter)</code></pre>
+
+    <h3>Taj Mahal</h3>
+    <div class="photo-grid">
+      <figure>
+        <img src="images/part2_1/taj_original.png" alt="Original Taj Mahal image" />
+        <figcaption>Original</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_1/taj_blurred.png" alt="Blurred Taj Mahal image" />
+        <figcaption>Blurred</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_1/taj_high_frequencies.png" alt="High frequencies of the Taj Mahal image" />
+        <figcaption>High frequencies</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_1/taj_sharpened_1.png" alt="Taj Mahal image sharpened with alpha = 1" />
+        <figcaption>Sharpened, alpha = 1</figcaption>
+      </figure>
+    </div>
+
+    <h3>Varying the sharpening amount</h3>
+    <div class="photo-grid">
+      <figure>
+        <img src="images/part2_1/taj_sharpened_0.png" alt="Taj Mahal image sharpened with alpha = 0" />
+        <figcaption>alpha = 0</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_1/taj_sharpened_1.png" alt="Taj Mahal image sharpened with alpha = 1" />
+        <figcaption>alpha = 1</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_1/taj_sharpened_2.png" alt="Taj Mahal image sharpened with alpha = 2" />
+        <figcaption>alpha = 2</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_1/taj_sharpened_5.png" alt="Taj Mahal image sharpened with alpha = 5" />
+        <figcaption>alpha = 5</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_1/taj_sharpened_10.png" alt="Taj Mahal image sharpened with alpha = 10" />
+        <figcaption>alpha = 10</figcaption>
+      </figure>
+    </div>
+    <p>
+      At alpha = 0 the image is just the original, and as alpha goes up the edges get crisper and the details stand out more. Alpha = 2 looked the best to me.
+      Past that, the edges start to look forced: they get darker and harsher than they should be, almost oversaturated, because sharpening keeps adding more
+      high frequencies on top of the image and overshoots at the edges.
+    </p>
+
+    <h3>My own image</h3>
+    <div class="photo-grid">
+      <figure>
+        <img src="images/part2_1/cathedral_original.png" alt="Original cathedral image" />
+        <figcaption>Original</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_1/cathedral_blurred.png" alt="Blurred cathedral image" />
+        <figcaption>Blurred</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_1/cathedral_high_frequencies.png" alt="High frequencies of the cathedral image" />
+        <figcaption>High frequencies</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_1/cathedral_sharpened_1.png" alt="Cathedral image sharpened with alpha = 1" />
+        <figcaption>Sharpened, alpha = 1</figcaption>
+      </figure>
+    </div>
+
+    <h3>Blurring, then sharpening again</h3>
+    <pre><code>resharpened = convolve(blurred, unsharp_filter)</code></pre>
+    <div class="photo-grid">
+      <figure>
+        <img src="images/part2_1/cathedral_original.png" alt="Original cathedral image" />
+        <figcaption>Original</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_1/cathedral_blurred.png" alt="Blurred cathedral image" />
+        <figcaption>Blurred</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_1/cathedral_resharpened_1.png" alt="Blurred cathedral image sharpened with alpha = 1" />
+        <figcaption>Blurred, then sharpened, alpha = 1</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_1/cathedral_resharpened_2.png" alt="Blurred cathedral image sharpened with alpha = 2" />
+        <figcaption>Blurred, then sharpened, alpha = 2</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_1/cathedral_resharpened_5.png" alt="Blurred cathedral image sharpened with alpha = 5" />
+        <figcaption>Blurred, then sharpened, alpha = 5</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_1/cathedral_resharpened_10.png" alt="Blurred cathedral image sharpened with alpha = 10" />
+        <figcaption>Blurred, then sharpened, alpha = 10</figcaption>
+      </figure>
+    </div>
+    <p>
+      The blurred-then-sharpened image looks sharper than the blurred one, but it doesn't get back to the original. The blur removed most of the fine detail, so there was nothing left 
+      for sharpening to bring back. Sharpening can only boost the high frequencies that are still there, so it made the bigger edges stand out again but couldn't recover the small details.
+      Turning up alpha made the main edges stronger, but the fine texture still didn't come back.
+    </p>
+
+    <h2>Part 2.2: Hybrid Images</h2>
+
+    <h3>How hybrid images work</h3>
+    <p>
+      Up close, the high frequencies of an image dominate what I see, but from far away only the low frequencies are visible. A hybrid image uses this
+      to show one picture up close and a different one from a distance. I low-pass filtered one image with a Gaussian, high-pass filtered the
+      other by subtracting its Gaussian blur from the original, and added the two together. Before filtering, I aligned each pair by clicking two matching points in both images.
+    </p>
+    <pre><code>def low_pass(im, sigma):
+    gaussian_1d = cv2.getGaussianKernel(6 * sigma + 1, sigma)
+    blurred = convolve2d(im, gaussian_1d, mode="same", boundary="symm")
+    return convolve2d(blurred, gaussian_1d.T, mode="same", boundary="symm")
+
+def high_pass(im, sigma):
+    return im - low_pass(im, sigma)
+
+def hybrid_image(im1, im2, sigma1, sigma2):
+    return high_pass(im1, sigma1) + low_pass(im2, sigma2)</code></pre>
+
+    <h3>Full process: Matthew and Daniel</h3>
+    <p>
+      I picked the cutoff values by trying a few different sigmas and checking the hybrid both up close and from far away. At sigma1 = 4, Matthew was too faint
+      up close, so I raised it to 5 to keep more of his detail. Daniel already looked right at sigma2 = 8, clear from far away without showing through too
+      much up close, so I kept it there. With sigma1 = 5 and sigma2 = 8, Matthew is clear up close and Daniel takes over from far away, which gave the best blend.
+    </p>
+    <p>I started with the two original photos.</p>
+    <div class="photo-grid">
+      <figure>
+        <img src="images/matthew.JPG" alt="Original photo of Matthew" />
+        <figcaption>Matthew (original)</figcaption>
+      </figure>
+      <figure>
+        <img src="images/daniel.JPG" alt="Original photo of Daniel" />
+        <figcaption>Daniel (original)</figcaption>
+      </figure>
+    </div>
+    <p>I aligned them and converted them to grayscale.</p>
+    <div class="photo-grid">
+      <figure>
+        <img src="images/part2_2/matthew_daniel_high_aligned.png" alt="Aligned image of Matthew" />
+        <figcaption>Matthew (aligned)</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_2/matthew_daniel_low_aligned.png" alt="Aligned image of Daniel" />
+        <figcaption>Daniel (aligned)</figcaption>
+      </figure>
+    </div>
+    <div class="photo-grid">
+      <figure>
+        <img src="images/part2_2/matthew_daniel_high_aligned_fft.png" alt="Fourier transform of the aligned image of Matthew" />
+        <figcaption>Matthew (aligned): Fourier transform</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_2/matthew_daniel_low_aligned_fft.png" alt="Fourier transform of the aligned image of Daniel" />
+        <figcaption>Daniel (aligned): Fourier transform</figcaption>
+      </figure>
+    </div>
+    <p>I high-pass filtered Matthew and low-pass filtered Daniel.</p>
+    <div class="photo-grid">
+      <figure>
+        <img src="images/part2_2/matthew_daniel_high_passed.png" alt="High-passed image of Matthew" />
+        <figcaption>Matthew, high-passed (sigma1 = 5)</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_2/matthew_daniel_high_passed_fft.png" alt="Fourier transform of the high-passed image of Matthew" />
+        <figcaption>High-passed: Fourier transform</figcaption>
+      </figure>
+    </div>
+    <div class="photo-grid">
+      <figure>
+        <img src="images/part2_2/matthew_daniel_low_passed.png" alt="Low-passed image of Daniel" />
+        <figcaption>Daniel, low-passed (sigma2 = 8)</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_2/matthew_daniel_low_passed_fft.png" alt="Fourier transform of the low-passed image of Daniel" />
+        <figcaption>Low-passed: Fourier transform</figcaption>
+      </figure>
+    </div>
+    <p>Adding the two filtered images gives the final hybrid.</p>
+    <div class="photo-grid">
+      <figure>
+        <img src="images/part2_2/matthew_daniel_hybrid.png" alt="Hybrid image of Matthew and Daniel" />
+        <figcaption>Hybrid</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_2/matthew_daniel_hybrid_fft.png" alt="Fourier transform of the hybrid image" />
+        <figcaption>Hybrid: Fourier transform</figcaption>
+      </figure>
+    </div>
+    <p>
+      In the Fourier transforms, the middle shows the low frequencies and the outside shows the high frequencies. For the low-passed Daniel image, the
+      transform is bright in the middle and much darker toward the edges, since the blur keeps the broad outlines and removes the fine details. For the
+      high-passed Matthew image, the change is smaller: only a small spot at the very center gets darker compared to his original transform, since
+      subtracting the blur only removes the lowest frequencies. The rest still looks brighter toward the middle because photos naturally have more broad
+      structure than fine detail. The plus sign through the middle shows up in most of the transforms because of the image borders and strong horizontal
+      and vertical edges, so it isn't specific to either filter. The hybrid's transform combines both, with Daniel's low frequencies in the middle and
+      Matthew's high frequencies around the outside.
+    </p>
+
+    <h3>Other hybrids</h3>
+    <div class="photo-grid">
+      <figure>
+        <img src="images/nutmeg.jpg" alt="Original photo of Nutmeg the cat" />
+        <figcaption>Nutmeg (high frequencies, sigma1 = 5)</figcaption>
+      </figure>
+      <figure>
+        <img src="images/DerekPicture.jpg" alt="Original photo of Derek" />
+        <figcaption>Derek (low frequencies, sigma2 = 8)</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_2/nutmeg_DerekPicture_hybrid.png" alt="Hybrid image of Nutmeg and Derek" />
+        <figcaption>Hybrid (sigma1 = 5, sigma2 = 8)</figcaption>
+      </figure>
+    </div>
+    <div class="photo-grid">
+      <figure>
+        <img src="images/olise.jpg" alt="Original photo of Olise" />
+        <figcaption>Olise (high frequencies, sigma1 = 5)</figcaption>
+      </figure>
+      <figure>
+        <img src="images/jude.jpg" alt="Original photo of Jude" />
+        <figcaption>Jude (low frequencies, sigma2 = 8)</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_2/olise_jude_hybrid.png" alt="Hybrid image of Olise and Jude" />
+        <figcaption>Hybrid (sigma1 = 5, sigma2 = 8)</figcaption>
+      </figure>
+    </div>
+
+    <h2>Part 2.3: Gaussian and Laplacian Stacks</h2>
+
+    <h3>Building the stacks</h3>
+    <p>
+      A stack is like a pyramid, but it is never downsampled, so every level is the same size as the original image. For the Gaussian stack, I apply
+      the same Gaussian blur at each level (as the assignment says, "just apply the Gaussian filter at each level, but do not subsample"). Each
+      Laplacian level is one Gaussian level minus the next, and the last level is the blurriest Gaussian level, so all the levels add back up to the
+      original. I used 5 levels and sigma = 5.
+    </p>
+    <pre><code>levels = 5
+sigma = 5
+
+
+def gaussian_blur(image, sigma):
+    gaussian_1d = cv2.getGaussianKernel(6 * sigma + 1, sigma)
+    blurred = convolve2d(image, gaussian_1d, mode="same", boundary="symm")
+    return convolve2d(blurred, gaussian_1d.T, mode="same", boundary="symm")
+
+
+def gaussian_stack(image):
+    stack = [image]
+    for i in range(levels - 1):
+        stack.append(gaussian_blur(stack[-1], sigma))
+    return stack
+
+
+def laplacian_stack(gaussian):
+    return [gaussian[i] - gaussian[i + 1] for i in range(levels - 1)] + [gaussian[-1]]</code></pre>
+
+    <h3>Apple and orange stacks</h3>
+    <p>Apple, Gaussian stack:</p>
+    <div class="photo-grid" style="grid-template-columns: repeat(5, 1fr);">
+      <figure>
+        <img src="images/part2_3/apple_gaussian_0.png" alt="Apple Gaussian stack, level 0" />
+        <figcaption>Level 0</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_3/apple_gaussian_1.png" alt="Apple Gaussian stack, level 1" />
+        <figcaption>Level 1</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_3/apple_gaussian_2.png" alt="Apple Gaussian stack, level 2" />
+        <figcaption>Level 2</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_3/apple_gaussian_3.png" alt="Apple Gaussian stack, level 3" />
+        <figcaption>Level 3</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_3/apple_gaussian_4.png" alt="Apple Gaussian stack, level 4" />
+        <figcaption>Level 4</figcaption>
+      </figure>
+    </div>
+    <p>Apple, Laplacian stack:</p>
+    <div class="photo-grid" style="grid-template-columns: repeat(5, 1fr);">
+      <figure>
+        <img src="images/part2_3/apple_laplacian_0.png" alt="Apple Laplacian stack, level 0" />
+        <figcaption>Level 0</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_3/apple_laplacian_1.png" alt="Apple Laplacian stack, level 1" />
+        <figcaption>Level 1</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_3/apple_laplacian_2.png" alt="Apple Laplacian stack, level 2" />
+        <figcaption>Level 2</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_3/apple_laplacian_3.png" alt="Apple Laplacian stack, level 3" />
+        <figcaption>Level 3</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_3/apple_laplacian_4.png" alt="Apple Laplacian stack, level 4" />
+        <figcaption>Level 4</figcaption>
+      </figure>
+    </div>
+    <p>Orange, Gaussian stack:</p>
+    <div class="photo-grid" style="grid-template-columns: repeat(5, 1fr);">
+      <figure>
+        <img src="images/part2_3/orange_gaussian_0.png" alt="Orange Gaussian stack, level 0" />
+        <figcaption>Level 0</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_3/orange_gaussian_1.png" alt="Orange Gaussian stack, level 1" />
+        <figcaption>Level 1</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_3/orange_gaussian_2.png" alt="Orange Gaussian stack, level 2" />
+        <figcaption>Level 2</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_3/orange_gaussian_3.png" alt="Orange Gaussian stack, level 3" />
+        <figcaption>Level 3</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_3/orange_gaussian_4.png" alt="Orange Gaussian stack, level 4" />
+        <figcaption>Level 4</figcaption>
+      </figure>
+    </div>
+    <p>Orange, Laplacian stack:</p>
+    <div class="photo-grid" style="grid-template-columns: repeat(5, 1fr);">
+      <figure>
+        <img src="images/part2_3/orange_laplacian_0.png" alt="Orange Laplacian stack, level 0" />
+        <figcaption>Level 0</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_3/orange_laplacian_1.png" alt="Orange Laplacian stack, level 1" />
+        <figcaption>Level 1</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_3/orange_laplacian_2.png" alt="Orange Laplacian stack, level 2" />
+        <figcaption>Level 2</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_3/orange_laplacian_3.png" alt="Orange Laplacian stack, level 3" />
+        <figcaption>Level 3</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_3/orange_laplacian_4.png" alt="Orange Laplacian stack, level 4" />
+        <figcaption>Level 4</figcaption>
+      </figure>
+    </div>
+
+    <h3>Blending with a mask</h3>
+    <p>
+      The mask is 1 on the left half (apple) and 0 on the right half (orange).
+      I gave the mask its own Gaussian stack, and blended each Laplacian level
+      using the mask from the same level. This way the fine details get a
+      sharp seam and the broad colors get a soft one.
+    </p>
+    <pre><code>mask = np.zeros_like(apple)
+mask[:, : apple.shape[1] // 2] = 1
+
+apple_gaussian, orange_gaussian, mask_gaussian = gaussian_stack(apple), gaussian_stack(orange), gaussian_stack(mask)
+apple_laplacian, orange_laplacian = laplacian_stack(apple_gaussian), laplacian_stack(orange_gaussian)
+
+apple_masked = [level * m for level, m in zip(apple_laplacian, mask_gaussian)]
+orange_masked = [level * (1 - m) for level, m in zip(orange_laplacian, mask_gaussian)]
+oraple_levels = [a + o for a, o in zip(apple_masked, orange_masked)]</code></pre>
+
+    <h3>Recreating Figure 3.42</h3>
+    <p>
+      In each row, the left image is the masked apple, the middle is the
+      masked orange, and the right is the two added together.
+    </p>
+    <p>High frequencies (level 0):</p>
+    <div class="photo-grid">
+      <figure>
+        <img src="images/part2_3/apple_masked_0.png" alt="Masked apple, level 0" />
+        <figcaption>(a) Apple, level 0</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_3/orange_masked_0.png" alt="Masked orange, level 0" />
+        <figcaption>(b) Orange, level 0</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_3/oraple_0.png" alt="Blended level 0" />
+        <figcaption>(c) Combined, level 0</figcaption>
+      </figure>
+    </div>
+    <p>Medium frequencies (level 2):</p>
+    <div class="photo-grid">
+      <figure>
+        <img src="images/part2_3/apple_masked_2.png" alt="Masked apple, level 2" />
+        <figcaption>(d) Apple, level 2</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_3/orange_masked_2.png" alt="Masked orange, level 2" />
+        <figcaption>(e) Orange, level 2</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_3/oraple_2.png" alt="Blended level 2" />
+        <figcaption>(f) Combined, level 2</figcaption>
+      </figure>
+    </div>
+    <p>Low frequencies (level 4):</p>
+    <div class="photo-grid">
+      <figure>
+        <img src="images/part2_3/apple_masked_4.png" alt="Masked apple, level 4" />
+        <figcaption>(g) Apple, level 4</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_3/orange_masked_4.png" alt="Masked orange, level 4" />
+        <figcaption>(h) Orange, level 4</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_3/oraple_4.png" alt="Blended level 4" />
+        <figcaption>(i) Combined, level 4</figcaption>
+      </figure>
+    </div>
+    <p>Full images, summed from all levels:</p>
+    <div class="photo-grid">
+      <figure>
+        <img src="images/part2_3/apple_masked_full.png" alt="Masked apple, all levels summed" />
+        <figcaption>(j) Apple, all levels</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_3/orange_masked_full.png" alt="Masked orange, all levels summed" />
+        <figcaption>(k) Orange, all levels</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_3/oraple.png" alt="Final blended oraple" />
+        <figcaption>(l) Final oraple</figcaption>
+      </figure>
+    </div>
+    <p>
+      The seam gets wider as the level goes up. At level 0 the switch from apple to orange happens right at the middle line, but since these are just the
+      fine details it's hard to notice. At level 2 the transition is softer and spread over a wider area, and at level 4 the two fruits fade into each other
+      gradually across a big band in the middle. When all the levels are added together in the final oraple, there's no visible line: the fine details
+      switch sharply so the textures don't overlap, and the overall brightness blends smoothly so you can't see where one fruit ends.
+    </p>
+
+    <h2>Part 2.4: Multiresolution Blending</h2>
+
+    <h3>How the blending works</h3>
+    <p>
+      I reuse the Gaussian and Laplacian stacks from Part 2.3. Each image gets
+      a Laplacian stack and the mask gets a Gaussian stack. I blend each level
+      as level1 * mask + level2 * (1 &minus; mask), using the mask from the
+      same level, and then sum all the levels. This way the fine details get a
+      sharp seam and the broad colors get a soft one. I used 8 levels and
+      sigma = 20 for the balls, and 5 levels and sigma = 5 for Jordan and LeBron.
+    </p>
+    <pre><code>def gaussian_stack(image, levels, sigma):
+    stack = [image]
+    for i in range(levels - 1):
+        stack.append(gaussian_blur(stack[-1], sigma))
+    return stack
+
+
+def blend(im1, im2, mask, levels, sigma):
+    im1_laplacian, im2_laplacian = laplacian_stack(gaussian_stack(im1, levels, sigma)), laplacian_stack(gaussian_stack(im2, levels, sigma))
+    mask_gaussian = gaussian_stack(mask, levels, sigma)
+    im1_masked = [level * m for level, m in zip(im1_laplacian, mask_gaussian)]
+    im2_masked = [level * (1 - m) for level, m in zip(im2_laplacian, mask_gaussian)]
+    blended_levels = [a + b for a, b in zip(im1_masked, im2_masked)]
+    return im1_masked, im2_masked, blended_levels</code></pre>
+
+    <h3>The oraple</h3>
+    <p>The oraple from Part 2.3 is my vertical seam blend.</p>
+    <div class="photo-grid">
+      <figure>
+        <img src="images/part2_3/oraple.png" alt="Final blended oraple" />
+        <figcaption>Oraple</figcaption>
+      </figure>
+    </div>
+
+    <h3>Basketball and soccer ball (straight seam)</h3>
+    <p>
+      I aligned the two balls with the provided <code>align_images</code>
+      code by clicking matching points, then used a vertical step mask.
+    </p>
+    <div class="photo-grid">
+      <figure>
+        <img src="images/basketball.jpg" alt="Original basketball photo" />
+        <figcaption>Basketball (original)</figcaption>
+      </figure>
+      <figure>
+        <img src="images/soccer.jpg" alt="Original soccer ball photo" />
+        <figcaption>Soccer ball (original)</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_4/basketball_aligned.png" alt="Aligned basketball image" />
+        <figcaption>Basketball (aligned)</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_4/soccer_aligned.png" alt="Aligned soccer ball image" />
+        <figcaption>Soccer ball (aligned)</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_4/mask.png" alt="Vertical step mask" />
+        <figcaption>Mask</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_4/basketball_soccer.png" alt="Final blend of the basketball and soccer ball" />
+        <figcaption>Final blend</figcaption>
+      </figure>
+    </div>
+    <p>
+      The seam on this blend is pretty noticeable. The two balls have very different patterns, so the black lines on each ball just stop at the
+      middle, and the brightness jumps from the gray basketball to the white soccer ball. I widened the transition a lot (8 levels, sigma = 20), which
+      made the brightness change smoother, but the wider blend also let parts of the Nike logo from the soccer ball faintly come through across the
+      seam. This blend works worse than the oraple because the apple and orange have smooth surfaces, while the balls have strong lines that blending can't hide.
+    </p>
+
+    <h3>Jordan behind LeBron (irregular mask)</h3>
+    <p>
+      I generated person masks for both photos and then shifted Jordan left with <code>np.roll</code> and combined the masks as <code>jordan_mask * (1 - lebron_mask)</code>,
+      so Jordan only shows where he doesn't overlap LeBron and the Heat player, which makes him appear behind them.
+    </p>
+    <pre><code>shift = -260
+        lebron, lebron_mask = load('lebron.jpg'), load('lebron_mask.png')
+        jordan = np.roll(load('jordan.jpg'), shift, axis=1)
+        jordan_mask = np.roll(load('jordan_mask.png'), shift, axis=1)
+        mask = jordan_mask * (1 - lebron_mask)
+    </code></pre>
+    <div class="photo-grid">
+      <figure>
+        <img src="images/jordan.jpg" alt="Original photo of Jordan" />
+        <figcaption>Jordan (original)</figcaption>
+      </figure>
+      <figure>
+        <img src="images/lebron.jpg" alt="Original photo of LeBron" />
+        <figcaption>LeBron (original)</figcaption>
+      </figure>
+      <figure>
+        <img src="images/jordan_mask.png" alt="Person mask for the Jordan photo" />
+        <figcaption>Jordan mask</figcaption>
+      </figure>
+      <figure>
+        <img src="images/lebron_mask.png" alt="Person mask for the LeBron photo" />
+        <figcaption>LeBron mask</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_4/jordan_lebron_mask.png" alt="Combined mask for the Jordan and LeBron blend" />
+        <figcaption>Combined mask</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_4/jordan_lebron.png" alt="Final blend of Jordan and LeBron" />
+        <figcaption>Final blend</figcaption>
+      </figure>
+    </div>
+    <p>
+      This blend came out really well. Because the mask follows Jordan's outline closely and the transition is narrow, there's barely any glow
+      from his original background, and he looks like he's actually in the arena behind LeBron and the Heat player. Combining the two masks made
+      the overlap look natural, with the players in front cleanly covering him.
+    </p>
+
+    <h3>Laplacian stacks for Jordan and LeBron</h3>
+    <p>
+      This is my favorite blend, so I show its stacks in the style of Figure
+      10 in the Burt and Adelson paper. Each row is one level: the masked
+      Jordan level, the masked LeBron level, and the two added together. The
+      last row sums all the levels.
+    </p>
+    <div class="photo-grid">
+      <figure>
+        <img src="images/part2_4/jordan_masked_0.png" alt="Masked Jordan image, level 0" />
+        <figcaption>Jordan, level 0</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_4/lebron_masked_0.png" alt="Masked LeBron image, level 0" />
+        <figcaption>LeBron, level 0</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_4/jordan_lebron_blended_0.png" alt="Blended Jordan and LeBron, level 0" />
+        <figcaption>Blended, level 0</figcaption>
+      </figure>
+    </div>
+    <div class="photo-grid">
+      <figure>
+        <img src="images/part2_4/jordan_masked_1.png" alt="Masked Jordan image, level 1" />
+        <figcaption>Jordan, level 1</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_4/lebron_masked_1.png" alt="Masked LeBron image, level 1" />
+        <figcaption>LeBron, level 1</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_4/jordan_lebron_blended_1.png" alt="Blended Jordan and LeBron, level 1" />
+        <figcaption>Blended, level 1</figcaption>
+      </figure>
+    </div>
+    <div class="photo-grid">
+      <figure>
+        <img src="images/part2_4/jordan_masked_2.png" alt="Masked Jordan image, level 2" />
+        <figcaption>Jordan, level 2</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_4/lebron_masked_2.png" alt="Masked LeBron image, level 2" />
+        <figcaption>LeBron, level 2</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_4/jordan_lebron_blended_2.png" alt="Blended Jordan and LeBron, level 2" />
+        <figcaption>Blended, level 2</figcaption>
+      </figure>
+    </div>
+    <div class="photo-grid">
+      <figure>
+        <img src="images/part2_4/jordan_masked_3.png" alt="Masked Jordan image, level 3" />
+        <figcaption>Jordan, level 3</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_4/lebron_masked_3.png" alt="Masked LeBron image, level 3" />
+        <figcaption>LeBron, level 3</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_4/jordan_lebron_blended_3.png" alt="Blended Jordan and LeBron, level 3" />
+        <figcaption>Blended, level 3</figcaption>
+      </figure>
+    </div>
+    <div class="photo-grid">
+      <figure>
+        <img src="images/part2_4/jordan_masked_4.png" alt="Masked Jordan image, level 4" />
+        <figcaption>Jordan, level 4</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_4/lebron_masked_4.png" alt="Masked LeBron image, level 4" />
+        <figcaption>LeBron, level 4</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_4/jordan_lebron_blended_4.png" alt="Blended Jordan and LeBron, level 4" />
+        <figcaption>Blended, level 4</figcaption>
+      </figure>
+    </div>
+    <div class="photo-grid">
+      <figure>
+        <img src="images/part2_4/jordan_masked_full.png" alt="Masked Jordan image, all levels summed" />
+        <figcaption>Jordan, all levels</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_4/lebron_masked_full.png" alt="Masked LeBron image, all levels summed" />
+        <figcaption>LeBron, all levels</figcaption>
+      </figure>
+      <figure>
+        <img src="images/part2_4/jordan_lebron.png" alt="Final blend of Jordan and LeBron" />
+        <figcaption>Final blend</figcaption>
+      </figure>
+    </div>
+
+    <h2>What I learned</h2>
+    <p>
+      The most important thing I learned is how blending works by blurring and then regenerating the image. Blurring the images over and over splits them
+      into layers from fine details to broad colors, and blurring the mask lets each layer get its own seam: sharp for the details and soft for the colors.
+      Adding the blended layers back together regenerates one image where the seam is hard to see, which is how Jordan ends up looking like he's actually behind LeBron.
+    </p>
+
+  </main>
+
+  <footer>
+    <a href="../../index.html">&larr; Back to all projects</a>
+  </footer>
+
+</body>
+</html>
