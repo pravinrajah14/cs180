@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Project 4: Exploring the Power of Flow Models</title>
+  <link rel="stylesheet" href="../../style.css" />
+  <style media="print">
+    @page { margin: 1cm; }
+    body { font-size: 8.5pt; line-height: 1.3; background: #fff; }
+    header { padding: 0 0 0.3rem; }
+    header h1 { font-size: 14pt; }
+    nav.breadcrumb, footer { display: none; }
+    main { max-width: none; padding: 0.4rem 0 0; }
+    h2 { font-size: 12pt; margin: 0.9rem 0 0.4rem; padding-bottom: 0.15rem; }
+    h3 { font-size: 10pt; margin: 0.6rem 0 0.25rem; }
+    h2, h3 { break-after: avoid; }
+    p { margin: 0.3rem 0; }
+    pre { padding: 0.35rem 0.5rem; margin: 0.35rem 0; line-height: 1.2; white-space: pre-wrap; overflow-wrap: anywhere; }
+    pre code { font-size: 6.5pt; }
+    figcaption { font-size: 7pt; margin-top: 0.15rem; }
+    figure { break-inside: avoid; }
+    .photo-pair, .photo-grid { gap: 0.3rem 0.5rem; margin: 0.35rem 0; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="wrap">
+      <h1>Project 4: Exploring the Power of Flow Models</h1>
+      <p>Part A: sampling, guidance, and editing with the pretrained PixNerd flow model.<br />
+        Part B: training a flow matching model from scratch on MNIST.</p>
+    </div>
+  </header>
+
+  <nav class="breadcrumb">
+    <a href="../../index.html">&larr; Back to all projects</a>
+  </nav>
+
+  <main>
+    <p>
+      This project is about flow models, which turn noise into an image by following a predicted velocity. In Part A I use
+      a pretrained text-to-image flow model to denoise images, generate new ones, edit images, and make visual anagrams and
+      hybrid images. In Part B I build a UNet from scratch and train it on MNIST, first as a one-step denoiser and then as a
+      flow matching model that can generate digits.
+    </p>
+
+    <h2>Part 1.1: Constructing Noisy Training Inputs</h2>
+    <p>
+      We blend the noise and the real image together, so it's not just adding noise on top: the image itself also gets
+      scaled down by t. Going from t = 0 to t = 1 takes us from pure noise to the real image, with the noise fading out as
+      the image fades in.
+    </p>
+    <p>noisy image = (1 - t) * noise + t * clean image, for t = 0.25, 0.5, 0.75 (noise is random Gaussian noise)</p>
+    <figure>
+      <img src="images/partA_1.1_noisy_stadium.png" alt="Memorial Stadium and noisy versions at t = 0.25, 0.50, and 0.75" />
+    </figure>
+    <p>
+      At t = 0.25 the stadium is barely visible through the noise, at 0.50 the field and stands show up, and at 0.75 most of
+      the detail is back.
+    </p>
+
+    <h2>Part 1.2: Classical Denoising</h2>
+    <p>
+      Since the noisy image is scaled down by t, I divide by t to restore its brightness, then use a Gaussian blur to average
+      out the noise. I tried &sigma; = 1, 2, 4, 8, 16 and kept whichever had the lowest error against the clean image
+      (&sigma; = 8 at t = 0.25, 2 at t = 0.50, and 1 at t = 0.75).
+    </p>
+    <p>denoised = blur(noisy image / t), using the blur strength (sigma = 1, 2, 4, 8, or 16) with the lowest error</p>
+    <figure>
+      <img src="images/partA_1.2_gaussian_blur_t025.png" alt="Noisy input and Gaussian-denoised result at t = 0.25" />
+      <figcaption>t = 0.25</figcaption>
+    </figure>
+    <figure>
+      <img src="images/partA_1.2_gaussian_blur_t050.png" alt="Noisy input and Gaussian-denoised result at t = 0.50" />
+      <figcaption>t = 0.50</figcaption>
+    </figure>
+    <figure>
+      <img src="images/partA_1.2_gaussian_blur_t075.png" alt="Noisy input and Gaussian-denoised result at t = 0.75" />
+      <figcaption>t = 0.75</figcaption>
+    </figure>
+    <p>
+      Blurring removes some noise but always trades it for detail. At t = 0.25 the result is just colored blobs, and even at
+      t = 0.75 the fine texture in the stands and trees is gone.
+    </p>
+
+    <h2>Part 1.3: One-Step Denoising</h2>
+    <p>
+      With the prompt "a high quality photo", the model predicts the velocity pointing from the noisy image toward the clean
+      image. Taking one step of size (1 &minus; t) along it jumps straight to an estimate of the clean image.
+    </p>
+    <p>denoised = noisy image + (1 - t) * velocity</p>
+    <figure>
+      <img src="images/partA_1.3_one_step_t025.png" alt="Original, noisy input, and one-step estimate at t = 0.25" />
+      <figcaption>t = 0.25</figcaption>
+    </figure>
+    <figure>
+      <img src="images/partA_1.3_one_step_t050.png" alt="Original, noisy input, and one-step estimate at t = 0.50" />
+      <figcaption>t = 0.50</figcaption>
+    </figure>
+    <figure>
+      <img src="images/partA_1.3_one_step_t075.png" alt="Original, noisy input, and one-step estimate at t = 0.75" />
+      <figcaption>t = 0.75</figcaption>
+    </figure>
+    <p>
+      One step does much better than blurring: even at t = 0.25 it recovers a clean, recognizable stadium. The lower t is,
+      though, the softer the result gets, since there's less of the real image left and the model has to guess more.
+    </p>
+
+    <h2>Part 1.4: Visualizing Velocity</h2>
+    <p>
+      I compare how far the model wants to move the noisy image (predicted update) with how far it actually needs to move
+      to reach the clean image (true update), and plot the per-pixel error between them at each t.
+    </p>
+    <p>
+      predicted update = (1 - t) * predicted velocity<br />
+      true update = (1 - t) * (clean image - noise) = clean image - noisy image
+    </p>
+    <figure>
+      <img src="images/partA_1.4_original.png" style="width: auto;" alt="Original Memorial Stadium photo" />
+    </figure>
+    <figure>
+      <img src="images/partA_1.4_velocity_t025.png" alt="Noisy image, predicted update, ground-truth update, and error heatmap at t = 0.25" />
+    </figure>
+    <figure>
+      <img src="images/partA_1.4_velocity_t050.png" alt="Noisy image, predicted update, ground-truth update, and error heatmap at t = 0.50" />
+    </figure>
+    <figure>
+      <img src="images/partA_1.4_velocity_t075.png" alt="Noisy image, predicted update, ground-truth update, and error heatmap at t = 0.75" />
+    </figure>
+    <p>
+      The error is biggest on edges and fine texture like the trees and stands and smallest on smooth areas like the sky. It
+      shrinks as t increases since there's less noise left to remove.
+    </p>
+
+    <h2>Part 1.5: Iterative Denoising with Euler Sampling</h2>
+    <p>
+      Instead of one big jump, Euler sampling takes many small steps of size 0.02, recomputing the velocity at each one, until
+      it reaches t = 1. Starting from the t = 0.5 image this is 25 updates, and I compare the result against the blur and
+      one-step results.
+    </p>
+    <p>next image = current image + step size * velocity, with step size 0.02, repeated until t = 1</p>
+    <figure>
+      <img src="images/partA_1.5_euler_steps.png" alt="Euler denoising trajectory from t = 0.50 to t = 1.00" />
+    </figure>
+    <figure>
+      <img src="images/partA_1.5_compare_methods.png" alt="Original, Gaussian blur, one-step estimate, and Euler denoising compared" />
+    </figure>
+    <p>
+      Blurring leaves color noise and smears everything, and the one-step estimate is clean but soft. Euler is the sharpest
+      and brings back texture in the stands and trees, because it corrects the direction at every step instead of guessing
+      the whole image at once.
+    </p>
+
+    <h2>Part 1.6: Generating Images from Noise</h2>
+    <p>
+      I ran the same Euler sampler starting at t = 0 from pure noise (50 updates) with the prompt "a high quality photo" to
+      generate new images from scratch.
+    </p>
+    <figure>
+      <img src="images/partA_1.6_generated_from_noise.png" alt="Images sampled from pure noise with the prompt a high quality photo" />
+    </figure>
+    <p>
+      Even though the prompt doesn't name a subject, every sample is a portrait of a person, so I'm guessing the model treats
+      "a high quality photo" as a photo of a person. Without guidance the quality of the faces are pretty random with some being an
+      actual face and others basically being mush.
+    </p>
+
+    <h2>Part 2.1: Classifier-Free Guidance (CFG)</h2>
+    <p>
+      Classifier-free guidance runs the model twice per step, once with the prompt and once with an empty prompt, and pushes
+      the velocity further in the direction the prompt adds (w = 7). I use the same starting noise as 1.6 so the results can
+      be compared directly.
+    </p>
+    <p>guided velocity = prompt velocity + 7 * (prompt velocity - empty-prompt velocity)</p>
+    <figure>
+      <img src="images/partA_2.1_cfg_generated.png" alt="CFG samples with guidance w = 7 using the same initial noise as Part 1.6" />
+    </figure>
+    <p>
+      With guidance every face is clean and well lit, with no distorted features. The tradeoff is variety as shown by the samples all
+      become similar types of faces with an almost identical background.
+    </p>
+
+    <h2>Part 3.1: Image-to-Image Editing</h2>
+    <p>
+      To edit an image, I noise it to a starting time t and then run Euler with CFG (w = 7, "a high quality photo") back to
+      t = 1. A low starting t means most of the image is noise, so the model makes up almost everything. A high t keeps most
+      of the original.
+    </p>
+    <p>starting image = (1 - t) * noise + t * original image, then take Euler steps with the guided velocity until t = 1</p>
+
+    <h3>Campanile</h3>
+    <figure>
+      <img src="images/partA_3.1_edit_campanile.png" alt="Campanile edits at starting times 0.02 through 0.50" />
+    </figure>
+
+    <h3>My own images</h3>
+    <figure>
+      <img src="images/partA_3.1_edit_memorial_stadium.png" alt="California Memorial Stadium edits at starting times 0.02 through 0.50" />
+      <figcaption>Memorial Stadium</figcaption>
+    </figure>
+    <figure>
+      <img src="images/partA_3.1_edit_chelsea_stadium.png" alt="Chelsea stadium edits at starting times 0.02 through 0.50" />
+      <figcaption>Stamford Bridge (Chelsea)</figcaption>
+    </figure>
+
+    <h3>Web image</h3>
+    <figure>
+      <img src="images/partA_3.1_edit_race_car_drawing.png" alt="Race car line drawing from the web, edited at starting times 0.02 through 0.50" />
+    </figure>
+
+    <h3>Hand-drawn images</h3>
+    <figure>
+      <img src="images/partA_3.1_edit_my_basketball_drawing.png" alt="Hand-drawn basketball edited at starting times 0.02 through 0.50" />
+    </figure>
+    <figure>
+      <img src="images/partA_3.1_edit_my_water_bottle_drawing.png" alt="Hand-drawn water bottle edited at starting times 0.02 through 0.50" />
+    </figure>
+    <p>
+      At the lowest starting times the model mostly makes up its own image keeping only the colors and most of the time the photo
+      doesn't even make sense. As the starting time goes up, more of the original shape comes back, and by 0.25 to 0.50 every edit is close to the
+      original. Clean line drawings like the race car come back early, while thin pencil sketches only return at 0.25.
+    </p>
+
+    <h2>Part 3.2: Text-Guided Image Editing</h2>
+    <p>
+      This is the same procedure as 3.1, but with an edit prompt instead of "a high quality photo", so the model pulls the
+      image toward the prompt while the starting time controls how much of the original structure is kept.
+    </p>
+    <p>starting image = (1 - t) * noise + t * original image, then take Euler steps with the guided velocity for the edit prompt</p>
+    <figure>
+      <img src="images/partA_3.2_campanile_to_skyscraper.jpg" alt="Campanile edited toward a New York skyscraper at starting times 0.02 through 0.50" />
+    </figure>
+    <figure>
+      <img src="images/partA_3.2_stadium_to_cereal.jpg" alt="Memorial Stadium edited toward a bowl of cereal at starting times 0.02 through 0.50" />
+    </figure>
+    <figure>
+      <img src="images/partA_3.2_chelsea_to_mac_and_cheese.jpg" alt="Chelsea stadium edited toward a plate of mac and cheese at starting times 0.02 through 0.50" />
+    </figure>
+    <p>
+      Low starting times give a plain version of the prompt, and high ones give back the original. The interesting edits are
+      in between (around 0.10 to 0.25), where the result is the prompt in the shape of the original, like a bowl of cereal
+      built like Memorial Stadium.
+    </p>
+
+    <h2>Part 3.3: Visual Anagrams</h2>
+    <p>
+      At each step I get the CFG velocity for the first prompt on the image, and the CFG velocity for the second prompt on
+      the image rotated 180&deg; (then rotate that velocity back). Averaging the two and taking an Euler step makes an image that has to
+      satisfy both prompts, one upright and one upside down.
+    </p>
+    <p>velocity = (velocity for prompt 1 + flip(velocity for prompt 2 on the flipped image)) / 2, where flip rotates 180&deg;</p>
+    <figure>
+      <img src="images/partA_3.3_anagram_mountains_boats.jpg" alt="Visual anagram: mountain range upright, fleet of boats when rotated 180 degrees" />
+    </figure>
+    <figure>
+      <img src="images/partA_3.3_anagram_soccer_player_trophy.jpg" alt="Visual anagram: soccer player upright, trophy when rotated 180 degrees" />
+    </figure>
+
+    <h2>Part 3.4: Hybrid Images</h2>
+    <p>
+      Like a hybrid image from project 2, but done on the velocities. The low frequencies come from the far prompt and the high
+      frequencies from the near prompt (Gaussian blur, kernel size 265, &sigma; = 16). Up close you see the near prompt, and
+      from far away you see the far prompt.
+    </p>
+    <p>velocity = blurred velocity for the far prompt + fine details of the velocity for the near prompt</p>
+    <div class="photo-grid">
+      <figure>
+        <img src="images/partA_3.4_hybrid_airplane_bird_big.jpg" alt="Bird and airplane hybrid at full size, with a small airplane flying down through the middle" />
+        <figcaption>Near: "a lithograph of a airplane"</figcaption>
+      </figure>
+      <figure>
+        <img src="images/partA_3.4_hybrid_airplane_bird_small.jpg" style="width: auto;" alt="Bird and airplane hybrid shown small, where the dark shape reads as a bird" />
+        <figcaption>Far: "a lithograph of a bird"</figcaption>
+      </figure>
+    </div>
+    <div class="photo-grid">
+      <figure>
+        <img src="images/partA_3.4_hybrid_leaf_pinetree_big.png" alt="Leaf and pine tree hybrid at full size, showing a detailed leaf" />
+        <figcaption>Near: "a watercolor of detailed leaf"</figcaption>
+      </figure>
+      <figure>
+        <img src="images/partA_3.4_hybrid_leaf_pinetree_small.png" style="width: auto;" alt="Leaf and pine tree hybrid shown small, where it reads as a pine tree" />
+        <figcaption>Far: "a watercolor of a pine tree"</figcaption>
+      </figure>
+    </div>
+
+    <h2>Part B: Flow Matching from Scratch</h2>
+    <p>
+      For Part B I train my own models on MNIST digits (28&times;28 grayscale), building up from a simple denoiser to a
+      class-conditioned flow matching model.
+    </p>
+
+    <h2>Part B 1.1: Implementing the UNet</h2>
+    <p>
+      I basically just copied the UNet from the architecture diagrams in the assignment below, implementing each of the
+      simple and composed ops and wiring them together the same way.
+    </p>
+    <figure>
+      <img src="images/partB_1.1_unet_diagram.png" alt="Unconditional UNet architecture diagram from the assignment" />
+    </figure>
+    <figure>
+      <img src="images/partB_1.1_unet_ops.png" alt="Simple and composed UNet operations from the assignment" />
+    </figure>
+
+    <h2>Part B 1.2: Using the UNet to Train a Denoiser</h2>
+    <p>
+      To make training pairs, I add Gaussian noise to clean digits at different strengths &sigma;.
+    </p>
+    <p>noisy image = clean image + sigma * noise</p>
+    <figure>
+      <img src="images/partB_1.2_noise_levels.png" alt="MNIST test digits noised at sigma 0.0 through 1.0, one noise level per row" />
+    </figure>
+    <p>
+      At low &sigma; the digits are easy to read, but as &sigma; grows the strokes blend into the background, and by &sigma; =
+      1.0 most digits are hard to make out.
+    </p>
+
+    <h3>1.2.1: Training</h3>
+    <p>
+      I trained the denoiser (D = 128) for 5 epochs with Adam (lr = 1e-4, batch size 256) to turn a noisy digit back into the
+      clean one, using &sigma; = 0.5 with fresh noise every batch.
+    </p>
+    <p>loss = (denoiser(clean image + 0.5 * noise) - clean image) ** 2, averaged over pixels</p>
+    <figure>
+      <img src="images/partB_1.2.1_denoiser_loss.png" alt="Training loss curve for the single-step denoiser" />
+    </figure>
+    <figure>
+      <img src="images/partB_1.2.1_denoiser_epoch1.png" alt="Clean, noisy, and denoised test digits after epoch 1" />
+    </figure>
+    <figure>
+      <img src="images/partB_1.2.1_denoiser_epoch5.png" alt="Clean, noisy, and denoised test digits after epoch 5" />
+    </figure>
+    <p>
+      After one epoch the outputs are already readable but soft. By epoch 5 the strokes are sharper and closer to the clean
+      digits.
+    </p>
+
+    <h3>1.2.2: Out-of-Distribution Testing</h3>
+    <p>
+      The denoiser was only trained at &sigma; = 0.5, so I test it on other noise levels to see how well it handles noise
+      it hasn't seen.
+    </p>
+    <figure>
+      <img src="images/partB_1.2.2_different_noise_levels.png" alt="Out-of-distribution test: clean digits, then noisy input and prediction pairs for each sigma" />
+    </figure>
+    <p>
+      Up to &sigma; = 0.6 the outputs stay clean. At 0.8 they start to smear, and at 1.0 many digits fall apart, since the
+      model never learned to remove that much noise.
+    </p>
+
+    <h3>1.2.3: Denoising Pure Noise</h3>
+    <p>
+      Here the input is pure noise with no digit in it. Every output is the same blurry blob that looks like a mix of 0, 8, and
+      9, and it barely changes from epoch 1 to epoch 5. The noise says nothing about which digit to make, so the MSE loss is
+      minimized by predicting the average of all training digits (their centroid), which is exactly this blob. That's also why
+      the loss flattens out around 0.07 almost right away. The edges of the number are also more clearly defined than the center as a result
+      of numbers like 3, 6, 8, 9, 0, 5 which all of the exterior boundaries making the average more clear around the borders.
+    </p>
+    <figure>
+      <img src="images/partB_1.2.3_pure_noise_loss.png" alt="Training loss curve for denoising pure noise" />
+    </figure>
+    <figure>
+      <img src="images/partB_1.2.3_pure_noise_epoch1.png" alt="Pure noise inputs and predictions after epoch 1" />
+    </figure>
+    <figure>
+      <img src="images/partB_1.2.3_pure_noise_epoch5.png" alt="Pure noise inputs and predictions after epoch 5" />
+    </figure>
+
+    <h2>Part B 2.1: Adding Time Conditioning to the UNet</h2>
+    <p>
+      Flow matching mixes noise and a clean digit at a random time t, and trains the UNet to predict the velocity
+      (clean digit &minus; noise) that moves from noise toward the digit. To tell the network what t is, I used the spec
+      below to update my UNet from 1.1 with the conditioning: I added an FCBlock and used two of them to turn t into a
+      per-channel scale that multiplies the Unflatten output and the first UpBlock output.
+    </p>
+    <p>
+      noisy image = (1 - t) * noise + t * clean image<br />
+      true velocity = clean image - noise<br />
+      loss = (predicted velocity - true velocity) ** 2, averaged over pixels
+    </p>
+    <figure>
+      <img src="images/partB_2.1_time_unet_diagram.png" alt="Time-conditioned UNet architecture diagram from the assignment" />
+    </figure>
+    <figure>
+      <img src="images/partB_2.1_fcblock.png" alt="FCBlock diagram from the assignment" />
+    </figure>
+
+    <h2>Part B 2.2: Training the Time-Conditioned UNet</h2>
+    <p>
+      For each batch I sample fresh noise and a random t ~ U[0, 1] per image, and train on the loss above. I used D = 64, batch
+      size 64, and Adam starting at lr = 1e-2 with an exponential decay (&gamma; = 0.1<sup>1/10</sup>) each epoch, for 10 epochs.
+    </p>
+    <figure>
+      <img src="images/partB_2.2_time_loss.png" alt="Training loss curve for the time-conditioned UNet" />
+    </figure>
+    <p>
+      The loss drops sharply in the first few hundred steps and then keeps improving slowly. It's predicting velocity rather
+      than the clean image, so it isn't directly comparable to the loss in Part 1.
+    </p>
+
+    <h2>Part B 2.3: Sampling from the Time-Conditioned UNet</h2>
+    <p>
+      To sample, I start from pure noise at t = 0 and take 50 Euler steps along the predicted velocity.
+    </p>
+    <p>next image = current image + (1/50) * predicted velocity, starting from noise and repeated 50 times</p>
+    <figure>
+      <img src="images/partB_2.3_time_digits_epoch1.png" alt="Time-conditioned samples after epoch 1" />
+    </figure>
+    <figure>
+      <img src="images/partB_2.3_time_digits_epoch5.png" alt="Time-conditioned samples after epoch 5" />
+    </figure>
+    <figure>
+      <img src="images/partB_2.3_time_digits_epoch10.png" alt="Time-conditioned samples after epoch 10" />
+    </figure>
+    <p>
+      At epoch 1 the samples are just squiggles, by epoch 5 recognizable digits appear, and by epoch 10 most are readable.
+      Some still look malformed or like two digits merged, since the model doesn't know which digit it's making.
+    </p>
+
+    <h2>Part B 2.4: Adding Class Conditioning to the UNet</h2>
+    <p>
+      To also condition on the digit, the class becomes a one-hot vector c fed through two more FCBlocks. The class embedding
+      scales the features and the time embedding shifts them. 10% of the time c is set to all zeros, so the same network also
+      learns the unconditional velocity needed for classifier-free guidance.
+    </p>
+    <p>
+      unflatten = class scale * unflatten + time shift<br />
+      up1 = class scale * up1 + time shift
+    </p>
+
+    <h2>Part B 2.5: Training the Class-Conditioned UNet</h2>
+    <p>
+      Training is the same as 2.2 (D = 64, batch size 64, lr = 1e-2 with exponential decay, 10 epochs), except each batch also
+      passes its labels, with the 10% class dropout.
+    </p>
+    <figure>
+      <img src="images/partB_2.5_class_loss.png" alt="Training loss curve for the class-conditioned UNet with the learning rate scheduler" />
+    </figure>
+    <p>
+      The loss follows a similar shape to the time-only model: a sharp drop early, then a slow decline for the rest of
+      training.
+    </p>
+
+    <h2>Part B 2.6: Sampling from the Class-Conditioned UNet</h2>
+    <p>
+      Sampling uses 300 Euler steps with classifier-free guidance (&gamma; = 5), generating 4 of each digit.
+    </p>
+    <p>guided velocity = no-class velocity + 5 * (class velocity - no-class velocity)</p>
+    <figure>
+      <img src="images/partB_2.6_class_digits_epoch1.png" alt="Class-conditioned samples with scheduler after epoch 1, four of each digit" />
+    </figure>
+    <figure>
+      <img src="images/partB_2.6_class_digits_epoch5.png" alt="Class-conditioned samples with scheduler after epoch 5, four of each digit" />
+    </figure>
+    <figure>
+      <img src="images/partB_2.6_class_digits_epoch10.png" alt="Class-conditioned samples with scheduler after epoch 10, four of each digit" />
+    </figure>
+    <p>
+      Knowing the class helps a lot: epoch 1 already gives mostly the right digits, and by epoch 5 they're clean. The
+      time-only model was still making squiggles at that point.
+    </p>
+
+    <h3>Removing the learning rate scheduler</h3>
+    <p>
+      The scheduler starts at a high learning rate 0.02 for fast progress and decays it so training settles down at the end. Without it,
+      keeping the learning rate the whole time would be too large to settle properly, so I used 0.001 instead, which is small
+      enough to be stable but still fast. It ends up just as good: the digits are clean at epoch 1 (cleaner than with the
+      scheduler), look about the same at epochs 5 and 10, and the loss ends at about the same value.
+    </p>
+    <figure>
+      <img src="images/partB_2.6_class_loss_no_scheduler.png" alt="Training loss curve for the class-conditioned UNet without a scheduler" />
+    </figure>
+    <figure>
+      <img src="images/partB_2.6_class_digits_no_scheduler_epoch1.png" alt="Class-conditioned samples without scheduler after epoch 1" />
+    </figure>
+    <figure>
+      <img src="images/partB_2.6_class_digits_no_scheduler_epoch5.png" alt="Class-conditioned samples without scheduler after epoch 5" />
+    </figure>
+    <figure>
+      <img src="images/partB_2.6_class_digits_no_scheduler_epoch10.png" alt="Class-conditioned samples without scheduler after epoch 10" />
+    </figure>
+
+  </main>
+
+  <footer>
+    <a href="../../index.html">&larr; Back to all projects</a>
+  </footer>
+
+</body>
+</html>
