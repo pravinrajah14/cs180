@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Project 4A: Image Warping and Mosaicing</title>
+  <title>Project 4: Image Warping, Mosaicing and Autostitching</title>
   <link rel="stylesheet" href="../../style.css" />
   <style media="print">
     @page { margin: 1cm; }
@@ -29,13 +29,15 @@
     table.system th { border-bottom: 1px solid #999; }
     table.system .b { border-left: 2px solid #999; }
     table.timings th, table.timings td { padding: 0.25rem 0.75rem; }
-    main > figure img { max-height: 460px; width: auto; max-width: 100%; margin: 0 auto; }
-    main > .photo-pair { max-width: 600px; margin-left: auto; margin-right: auto; }
+    figure img { border: none; border-radius: 0; }
+    main > figure img { max-height: 700px; width: auto; max-width: 100%; margin: 0 auto; }
+    figcaption { text-align: center; }
+    figcaption:empty { display: none; }
     .row3 { display: grid; grid-template-columns: 3fr 3fr 4fr; gap: 0.75rem; align-items: center; margin: 1rem 0; }
     .row3 figure { margin: 0; }
     .row3 figure img { width: 100%; height: auto; }
     @media (max-width: 600px) { .row3 { grid-template-columns: 1fr; } }
-    main > .photo-pair.slides { max-width: 760px; grid-template-columns: 1.272fr 1.698fr; align-items: center; }
+    main > .photo-pair.slides { grid-template-columns: 1.272fr 1.698fr; align-items: center; }
     @media (max-width: 600px) { main > .photo-pair.slides { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -43,7 +45,7 @@
 
   <header>
     <div class="wrap">
-      <h1>Project 4A: Image Warping and Mosaicing</h1>
+      <h1>Project 4: Image Warping, Mosaicing and Autostitching</h1>
       <p>Recovering homographies between photos, warping and rectifying images, and blending them into mosaics.</p>
     </div>
   </header>
@@ -62,18 +64,18 @@
     </p>
 
     <div class="photo-pair">
-      <figure><img src="images/photo_tapestry_1.jpg" alt="Forest tapestry, first photo" /></figure>
-      <figure><img src="images/photo_tapestry_2.jpg" alt="Forest tapestry, second photo, rotated right toward the wall-mounted plants" /></figure>
+      <figure><img src="images/photo_tapestry_1.jpg" alt="Forest tapestry, first photo" /><figcaption>Forest tapestry, first photo</figcaption></figure>
+      <figure><img src="images/photo_tapestry_2.jpg" alt="Forest tapestry, second photo, rotated right toward the wall-mounted plants" /><figcaption>Forest tapestry, second photo, rotated right toward the wall-mounted plants</figcaption></figure>
     </div>
 
     <div class="photo-pair">
-      <figure><img src="images/photo_street_1.jpg" alt="Apartment buildings across the street, first photo" /></figure>
-      <figure><img src="images/photo_street_2.jpg" alt="Apartment buildings, second photo, rotated to show the recycling bin" /></figure>
+      <figure><img src="images/photo_street_1.jpg" alt="Apartment buildings across the street, first photo" /><figcaption>Apartment buildings across the street, first photo</figcaption></figure>
+      <figure><img src="images/photo_street_2.jpg" alt="Apartment buildings, second photo, rotated to show the recycling bin" /><figcaption>Apartment buildings, second photo, rotated to show the recycling bin</figcaption></figure>
     </div>
 
     <div class="photo-pair">
-      <figure><img src="images/photo_jersey_1.jpg" alt="Room with a window and blinds, first photo" /></figure>
-      <figure><img src="images/photo_jersey_2.jpg" alt="Room, second photo, rotated toward the door with the Mendoza 15 jersey" /></figure>
+      <figure><img src="images/photo_jersey_1.jpg" alt="Room with a window and blinds, first photo" /><figcaption>Room with a window and blinds, first photo</figcaption></figure>
+      <figure><img src="images/photo_jersey_2.jpg" alt="Room, second photo, rotated toward the door with the Mendoza 15 jersey" /><figcaption>Room, second photo, rotated toward the door with the Mendoza 15 jersey</figcaption></figure>
     </div>
     <p>
       The overlap shows up where the tapestry and the jersey get cut off: each one is split between the two photos of
@@ -110,12 +112,13 @@
       points I clicked, the full system and the H that least squares recovered.
     </p>
     <div class="photo-pair slides">
-      <figure><img src="images/slide_disc_homography_in_a_nutshell.png" alt="Discussion slide: a 3x3 matrix with entries a to h and a 1 in the corner maps (x, y, 1) to lambda times (u, v, 1)" /></figure>
-      <figure><img src="images/slide_disc_problem_2_2.png" alt="Discussion worksheet Problem 2.2: the 8 by 8 matrix system built from four point pairs, with the unknowns h1 to h8 and the target points u and v" /></figure>
+      <figure><img src="images/slide_disc_homography_in_a_nutshell.png" alt="Discussion slide: a 3x3 matrix with entries a to h and a 1 in the corner maps (x, y, 1) to lambda times (u, v, 1)" /><figcaption>Discussion slide: a 3x3 matrix with entries a to h and a 1 in the corner maps (x, y, 1) to lambda times (u, v, 1)</figcaption></figure>
+      <figure><img src="images/slide_disc_problem_2_2.png" alt="Discussion worksheet Problem 2.2: the 8 by 8 matrix system built from four point pairs, with the unknowns h1 to h8 and the target points u and v" /><figcaption>Discussion worksheet Problem 2.2: the 8 by 8 matrix system built from four point pairs, with the unknowns h1 to h8 and the target points u and v</figcaption></figure>
     </div>
 
     <figure>
       <img src="images/a2_tapestry_points.png" alt="Matching points numbered on both tapestry photos" />
+      <figcaption>Matching points numbered on both tapestry photos</figcaption>
     </figure>
     <div class="table-scroll">
       <table class="system">
@@ -152,6 +155,7 @@
 
     <figure>
       <img src="images/a2_jersey_points.png" alt="Matching points numbered on both mendoza jersey photos" />
+      <figcaption>Matching points numbered on both mendoza jersey photos</figcaption>
     </figure>
     <div class="table-scroll">
       <table class="system">
@@ -188,6 +192,7 @@
 
     <figure>
       <img src="images/a2_street_points.png" alt="Matching points numbered on both street photos" />
+      <figcaption>Matching points numbered on both street photos</figcaption>
     </figure>
     <div class="table-scroll">
       <table class="system">
@@ -273,20 +278,20 @@
     </p>
 
     <div class="photo-pair">
-      <figure><img src="images/a3_street_corners.jpg" alt="Angled street photo with the four corners of the white building's end panel outlined in red" /></figure>
-      <figure><img src="images/a3_door_corners.jpg" alt="Photo of a wooden door with the four corners of its tall panel outlined in red" /></figure>
+      <figure><img src="images/a3_street_corners.jpg" alt="Angled street photo with the four corners of the white building's end panel outlined in red" /><figcaption>Angled street photo with the four corners of the white building's end panel outlined in red</figcaption></figure>
+      <figure><img src="images/a3_door_corners.jpg" alt="Photo of a wooden door with the four corners of its tall panel outlined in red" /><figcaption>Photo of a wooden door with the four corners of its tall panel outlined in red</figcaption></figure>
     </div>
     <div class="photo-pair">
-      <figure><img src="images/a3_street_nn.png" alt="Rectified street photo, nearest neighbor" /></figure>
-      <figure><img src="images/a3_street_bilinear.png" alt="Rectified street photo, bilinear" /></figure>
+      <figure><img src="images/a3_street_nn.png" alt="Rectified street photo, nearest neighbor" /><figcaption>Rectified street photo, nearest neighbor</figcaption></figure>
+      <figure><img src="images/a3_street_bilinear.png" alt="Rectified street photo, bilinear" /><figcaption>Rectified street photo, bilinear</figcaption></figure>
     </div>
     <div class="photo-pair">
-      <figure><img src="images/a3_door_nn.png" alt="Rectified door panel, nearest neighbor" /></figure>
-      <figure><img src="images/a3_door_bilinear.png" alt="Rectified door panel, bilinear" /></figure>
+      <figure><img src="images/a3_door_nn.png" alt="Rectified door panel, nearest neighbor" /><figcaption>Rectified door panel, nearest neighbor</figcaption></figure>
+      <figure><img src="images/a3_door_bilinear.png" alt="Rectified door panel, bilinear" /><figcaption>Rectified door panel, bilinear</figcaption></figure>
     </div>
     <div class="photo-pair">
-      <figure><img src="images/a3_street_zoom.jpg" alt="Zoomed-in crop of the same edge, nearest neighbor on the left and bilinear on the right" /></figure>
-      <figure><img src="images/a3_door_zoom.jpg" alt="Zoomed-in crop of the same edge, nearest neighbor on the left and bilinear on the right" /></figure>
+      <figure><img src="images/a3_street_zoom.jpg" alt="Zoomed-in crop of the same edge, nearest neighbor on the left and bilinear on the right" /><figcaption>Zoomed-in crop of the same edge, nearest neighbor on the left and bilinear on the right</figcaption></figure>
+      <figure><img src="images/a3_door_zoom.jpg" alt="Zoomed-in crop of the same edge, nearest neighbor on the left and bilinear on the right" /><figcaption>Zoomed-in crop of the same edge, nearest neighbor on the left and bilinear on the right</figcaption></figure>
     </div>
 
     <table class="timings">
@@ -326,21 +331,21 @@
     </p>
 
     <div class="row3">
-      <figure><img src="images/photo_tapestry_1.jpg" alt="Forest tapestry, first photo" /></figure>
-      <figure><img src="images/photo_tapestry_2.jpg" alt="Forest tapestry, second photo" /></figure>
-      <figure><img src="images/a4_tapestry_mosaic.png" alt="Mosaic of the tapestry wall and the corner with wall-mounted plants" /></figure>
+      <figure><img src="images/photo_tapestry_1.jpg" alt="Forest tapestry, first photo" /><figcaption>Forest tapestry, first photo</figcaption></figure>
+      <figure><img src="images/photo_tapestry_2.jpg" alt="Forest tapestry, second photo" /><figcaption>Forest tapestry, second photo</figcaption></figure>
+      <figure><img src="images/a4_tapestry_mosaic.png" alt="Mosaic of the tapestry wall and the corner with wall-mounted plants" /><figcaption>Mosaic of the tapestry wall and the corner with wall-mounted plants</figcaption></figure>
     </div>
 
     <div class="row3">
-      <figure><img src="images/photo_street_1.jpg" alt="Apartment buildings across the street, first photo" /></figure>
-      <figure><img src="images/photo_street_2.jpg" alt="Apartment buildings, second photo, with the recycling bin" /></figure>
-      <figure><img src="images/a4_street_mosaic.png" alt="Mosaic of the street with the apartment buildings and the recycling bin" /></figure>
+      <figure><img src="images/photo_street_1.jpg" alt="Apartment buildings across the street, first photo" /><figcaption>Apartment buildings across the street, first photo</figcaption></figure>
+      <figure><img src="images/photo_street_2.jpg" alt="Apartment buildings, second photo, with the recycling bin" /><figcaption>Apartment buildings, second photo, with the recycling bin</figcaption></figure>
+      <figure><img src="images/a4_street_mosaic.png" alt="Mosaic of the street with the apartment buildings and the recycling bin" /><figcaption>Mosaic of the street with the apartment buildings and the recycling bin</figcaption></figure>
     </div>
 
     <div class="row3">
-      <figure><img src="images/photo_jersey_1.jpg" alt="Room with a window and blinds, first photo" /></figure>
-      <figure><img src="images/photo_jersey_2.jpg" alt="Room, second photo, with the door and the Mendoza 15 jersey" /></figure>
-      <figure><img src="images/a4_jersey_mosaic.png" alt="Mosaic of the window and the door with the Mendoza 15 jersey" /></figure>
+      <figure><img src="images/photo_jersey_1.jpg" alt="Room with a window and blinds, first photo" /><figcaption>Room with a window and blinds, first photo</figcaption></figure>
+      <figure><img src="images/photo_jersey_2.jpg" alt="Room, second photo, with the door and the Mendoza 15 jersey" /><figcaption>Room, second photo, with the door and the Mendoza 15 jersey</figcaption></figure>
+      <figure><img src="images/a4_jersey_mosaic.png" alt="Mosaic of the window and the door with the Mendoza 15 jersey" /><figcaption>Mosaic of the window and the door with the Mendoza 15 jersey</figcaption></figure>
     </div>
 
     <p>
@@ -351,6 +356,90 @@
       (parallax). In the first photo that spot shows road and grass. Because the detail comes from only one photo, the
       bin's edges and graffiti stay sharp instead of turning into a see-through ghost, with only a faint haze left on
       its left side from the averaged colors.
+    </p>
+
+    <h2>B.1: Harris Corners and ANMS</h2>
+    <p>
+     I used the provided harris.py to find corners at a single scale. It computes a corner strength for every pixel, which is high where a small window would change a lot if it slid in any direction, and keeps every pixel that is stronger than its 8 neighbors. It also throws away anything within 20 pixels of the border, so the 40×40 window in B.2 always fits. This gives far too many corners, so I used Adaptive Non-Maximal Suppression (ANMS) from Section 3 of the paper to pick 250 of them. 
+     For each corner, I find the distance to the nearest corner that is clearly stronger, meaning its own strength is less than 0.9 times that neighbor’s (c_robust = 0.9 from the paper). A corner with a large distance is the strongest point in a big area, so I keep the 250 corners with the largest distances. The left image shows all the Harris corners, and the right image shows the 250 kept after ANMS.
+    </p>
+    <div class="photo-pair">
+      <figure><img src="images/b1_doe_harris.jpg" alt="All Harris corners on the Doe entrance" /><figcaption>All Harris corners</figcaption></figure>
+      <figure><img src="images/b1_doe_anms.jpg" alt="250 corners kept by ANMS on the Doe entrance" /><figcaption>250 corners kept by ANMS</figcaption></figure>
+    </div>
+    <p>
+     Harris found all of the corners and they covered the entire image. It even covered the flat areas and just considered the straight up marbling on the floors and the pillars. With no minimum strength, any tiny bump would count. After ANMS, the corners are spread evenly across the image 
+     and that allowed many of them to sit on actual corners like stair edges or lamps or the plaque text, which made it better. Sometimes, the corner choices were questionable because there were no stronger corners nearby like in the center of one of the columns.
+    </p>
+
+    <h2>B.2: Feature Descriptors</h2>
+    <p>
+     For each corner, I blurred the grayscale image with a Gaussian (sigma 1.5), then sampled an 8×8 grid of values from the 40×40 window around the corner, taking every 5th pixel. This matches the paper’s 8×8 patch with a sample spacing of 5. The blur keeps every 5th pixel from being a single random value, 
+     since each one now holds an average of its surroundings. I then normalized each patch to have mean 0 and standard deviation 1, so the same spot gives nearly the same descriptor even if one photo is brighter or has more contrast. The top row shows five 40×40 windows and the bottom row shows their 8×8 descriptors.
+    </p>
+    <figure>
+      <img src="images/b2_doe_descriptors.jpg" alt="Doe entrance feature descriptors" />
+      <figcaption>Five corners: the 40×40 window around each (top) and its normalized 8×8 descriptor (bottom)</figcaption>
+    </figure>
+    <p>
+     Each descriptor keeps the rough layout of light and dark in its window, like the bright rectangle in the corner of the first one or the dark lamp fixture down the middle of the second, but loses all the fine detail and texture. Every descriptor also uses the full range from black to white, even though the windows
+     have very different brightness, which is the normalization at work. Two of the corners are on the same lamp only 4 pixels apart, and their descriptors look almost identical. That is what the large blurred window is for: Harris corners are often off by 1 to 3 pixels, and a small shift barely changes the descriptor.
+    </p>
+
+    <h2>B.3: Feature Matching</h2>
+    <p>
+    To match features, I measured the squared distance between every descriptor in the first photo and every descriptor in the second. For each feature, I found its closest descriptor (the first nearest neighbor) and its second closest. Following Lowe’s approach from Section 5 of the paper, I keep a match only if the first 
+    nearest neighbor is much closer than the second, with a ratio below 0.4, which I picked from Figure 6b, where correct matches cluster at low ratios and wrong ones near 1. A single distance cutoff doesn’t work, because distances depend on the feature: a busy patch is far from everything, including its true match, while a 
+    smooth patch is close to everything. If the best and second-best candidates are about equally close, the feature is ambiguous, so it is thrown out. The pairs below are the tapestry, the street and the jersey, with photo 1 on the left and photo 2 on the right. Matching points share a color.
+    </p>
+    <div class="photo-pair">
+      <figure><img src="images/b3_tapestry_matches_1.jpg" alt="Tapestry matches, photo 1" /><figcaption>Tapestry matches, photo 1</figcaption></figure>
+      <figure><img src="images/b3_tapestry_matches_2.jpg" alt="Tapestry matches, photo 2" /><figcaption>Tapestry matches, photo 2</figcaption></figure>
+    </div>
+    <div class="photo-pair">
+      <figure><img src="images/b3_street_matches_1.jpg" alt="Street matches, photo 1" /><figcaption>Street matches, photo 1</figcaption></figure>
+      <figure><img src="images/b3_street_matches_2.jpg" alt="Street matches, photo 2" /><figcaption>Street matches, photo 2</figcaption></figure>
+    </div>
+    <div class="photo-pair">
+      <figure><img src="images/b3_jersey_matches_1.jpg" alt="Jersey matches, photo 1" /><figcaption>Jersey matches, photo 1</figcaption></figure>
+      <figure><img src="images/b3_jersey_matches_2.jpg" alt="Jersey matches, photo 2" /><figcaption>Jersey matches, photo 2</figcaption></figure>
+    </div>
+    <p>
+      Most matches on the tapestry land inside the artwork, on the mountains and trees, with a few along the rail above it. Those are the most distinctive spots in the scene, so their best match is clearly better than the second best. The shared colors make it easy to check: a point on a tree in photo 1 has the same color as the same tree in photo 2. Unlike the ANMS corners in B.1, which also landed on flat areas, almost none of the matches are on blank wall. A smooth patch of wall looks like every other smooth patch, so its closest and second-closest descriptors are about equally close and it fails the ratio test. A few weak matches still get through, like the ones on the ceiling and the blank wall in the tapestry pair and on the road in the street pair, so the ratio test alone doesn’t remove every bad match, and RANSAC handles the rest in B.4.
+    </p>
+
+    <h2>B.4: RANSAC and Automatic Mosaics</h2>
+    <p>
+     Even after the ratio test, a few wrong matches can remain, and a single wrong pair can throw off a least-squares homography. RANSAC gets around this by trial and error. I pick 4 random matches, compute the exact homography through them with my computeH from Part A, and apply it to every matched point in photo 1. Matches 
+     that land within 4 pixels of their partner in photo 2 count as inliers, since they agree with that homography. Harris corners are usually off by 1 to 3 pixels, so 4 leaves a little margin while wrong matches still land much farther away. I repeat this 5000 times, keep the largest set of inliers, and then recompute H with least squares on all of them. If a sample includes a wrong match, its homography is off and few points agree with it, so wrong matches 
+     never end up in the final fit. With the final H, I made each mosaic with make_mosaic from Part A, using the same warping and blending as before. For each pair, the first row shows the RANSAC inliers on photo 1 (left) and photo 2 (right), and the second row shows the mosaic from my hand-clicked points (left) next to the automatic one (right).
+    </p>
+    <div class="photo-pair">
+      <figure><img src="images/b4_tapestry_inliers_1.jpg" alt="Tapestry RANSAC inliers, photo 1" /><figcaption>Tapestry RANSAC inliers, photo 1</figcaption></figure>
+      <figure><img src="images/b4_tapestry_inliers_2.jpg" alt="Tapestry RANSAC inliers, photo 2" /><figcaption>Tapestry RANSAC inliers, photo 2</figcaption></figure>
+    </div>
+    <div class="photo-pair">
+      <figure><img src="images/a4_tapestry_mosaic.png" alt="Tapestry mosaic from clicked points" /><figcaption>Tapestry mosaic from clicked points</figcaption></figure>
+      <figure><img src="images/b4_tapestry_mosaic.png" alt="Tapestry automatic mosaic" /><figcaption>Tapestry automatic mosaic</figcaption></figure>
+    </div>
+    <div class="photo-pair">
+      <figure><img src="images/b4_street_inliers_1.jpg" alt="Street RANSAC inliers, photo 1" /><figcaption>Street RANSAC inliers, photo 1</figcaption></figure>
+      <figure><img src="images/b4_street_inliers_2.jpg" alt="Street RANSAC inliers, photo 2" /><figcaption>Street RANSAC inliers, photo 2</figcaption></figure>
+    </div>
+    <div class="photo-pair">
+      <figure><img src="images/a4_street_mosaic.png" alt="Street mosaic from clicked points" /><figcaption>Street mosaic from clicked points</figcaption></figure>
+      <figure><img src="images/b4_street_mosaic.png" alt="Street automatic mosaic" /><figcaption>Street automatic mosaic</figcaption></figure>
+    </div>
+    <div class="photo-pair">
+      <figure><img src="images/b4_jersey_inliers_1.jpg" alt="Jersey RANSAC inliers, photo 1" /><figcaption>Jersey RANSAC inliers, photo 1</figcaption></figure>
+      <figure><img src="images/b4_jersey_inliers_2.jpg" alt="Jersey RANSAC inliers, photo 2" /><figcaption>Jersey RANSAC inliers, photo 2</figcaption></figure>
+    </div>
+    <div class="photo-pair">
+      <figure><img src="images/a4_jersey_mosaic.png" alt="Jersey mosaic from clicked points" /><figcaption>Jersey mosaic from clicked points</figcaption></figure>
+      <figure><img src="images/b4_jersey_mosaic.png" alt="Jersey automatic mosaic" /><figcaption>Jersey automatic mosaic</figcaption></figure>
+    </div>
+    <p>
+    After RANSAC, the weak matches from B.3 are gone. On the tapestry, the inliers sit on the mountains, the trees and the rail, and the points on the ceiling and the blank wall were removed. On the street, RANSAC dropped the matches on the road and the one on top of the recycling bin. The bin was much closer to the camera than the buildings, so its match doesn’t fit the same homography (the same parallax as in A.4). On the jersey, most of the matches on the blinds were removed, since the repeating slats can match the wrong slat, and the inliers sit on the door frame, the window frame and the edge of the jersey. The automatic mosaics look nearly the same as the manual ones. The main difference is the outline of the warped photo, which is angled slightly differently at the edges because the two homographies were fit on different points. 
     </p>
 
   </main>
